@@ -1,0 +1,4 @@
+[submodule "pya2l-fork"]
+	path = pya2l-fork
+	url = https://github.com/ngamber/pya2l.git
+	branch = use-custom-a2l-grpc-fork

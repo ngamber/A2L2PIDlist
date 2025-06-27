@@ -1,1 +1,1 @@
-pya2l>=0.1.10
+git+https://github.com/ngamber/pya2l.git@use-custom-a2l-grpc-fork
