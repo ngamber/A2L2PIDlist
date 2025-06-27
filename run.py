@@ -12,6 +12,41 @@ import glob
 from pathlib import Path
 
 
+def check_dependencies():
+    """Check if required dependencies are installed."""
+    try:
+        import pya2l
+        return True
+    except ImportError:
+        return False
+
+
+def install_dependencies():
+    """Install required dependencies from requirements.txt."""
+    requirements_file = Path("requirements.txt")
+    
+    if not requirements_file.exists():
+        print("Warning: requirements.txt not found. Attempting to install pya2l directly...")
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "pya2l>=0.1.10"], 
+                         check=True, capture_output=True)
+            print("Successfully installed pya2l")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to install pya2l: {e}")
+            return False
+    
+    try:
+        print("Installing dependencies from requirements.txt...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(requirements_file)], 
+                     check=True, capture_output=True)
+        print("Successfully installed dependencies")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to install dependencies: {e}")
+        return False
+
+
 def setup_environment(venv_path):
     """Activate virtual environment if specified."""
     if not venv_path:
@@ -189,6 +224,17 @@ Examples:
     
     # Setup virtual environment if specified
     setup_environment(args.venv)
+    
+    # Check and install dependencies if needed
+    if not check_dependencies():
+        print("Required dependencies not found. Installing...")
+        if not install_dependencies():
+            print("Failed to install dependencies. The script will use fallback parsing.")
+            print("For better A2L parsing, install pya2l manually with:")
+            print("  pip install -r requirements.txt")
+            print("or:")
+            print("  pip install pya2l>=0.1.10")
+            print()
     
     # Validate paths and files
     errors = validate_paths(args.input_dir, args.output_dir, args.template)
