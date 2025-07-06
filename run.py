@@ -12,23 +12,45 @@ import glob
 from pathlib import Path
 
 
-def check_dependencies():
+def get_python_executable(venv_path=None):
+    """Get the appropriate Python executable (venv or system)."""
+    if venv_path:
+        venv_path = Path(venv_path)
+        if os.name == 'nt':  # Windows
+            python_exe = venv_path / "Scripts" / "python.exe"
+        else:  # Unix-like (macOS, Linux)
+            python_exe = venv_path / "bin" / "python"
+        
+        if python_exe.exists():
+            return str(python_exe)
+        else:
+            print(f"Warning: Python executable not found in virtual environment: {python_exe}")
+            return sys.executable
+    
+    return sys.executable
+
+
+def check_dependencies(venv_path=None):
     """Check if required dependencies are installed."""
+    python_exe = get_python_executable(venv_path)
+    
     try:
-        import pya2l
+        result = subprocess.run([python_exe, "-c", "import pya2l; print('pya2l available')"], 
+                              capture_output=True, text=True, check=True)
         return True
-    except ImportError:
+    except subprocess.CalledProcessError:
         return False
 
 
-def install_dependencies():
+def install_dependencies(venv_path=None):
     """Install required dependencies from requirements.txt."""
+    python_exe = get_python_executable(venv_path)
     requirements_file = Path("requirements.txt")
     
     if not requirements_file.exists():
         print("Warning: requirements.txt not found. Attempting to install pya2l directly...")
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "pya2l>=0.1.10"], 
+            subprocess.run([python_exe, "-m", "pip", "install", "pya2l>=0.1.10"], 
                          check=True, capture_output=True)
             print("Successfully installed pya2l")
             return True
@@ -38,7 +60,7 @@ def install_dependencies():
     
     try:
         print("Installing dependencies from requirements.txt...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(requirements_file)], 
+        subprocess.run([python_exe, "-m", "pip", "install", "-r", str(requirements_file)], 
                      check=True, capture_output=True)
         print("Successfully installed dependencies")
         return True
@@ -48,7 +70,7 @@ def install_dependencies():
 
 
 def setup_environment(venv_path):
-    """Activate virtual environment if specified."""
+    """Setup virtual environment if specified."""
     if not venv_path:
         return
     
@@ -57,19 +79,14 @@ def setup_environment(venv_path):
         print(f"Error: Virtual environment path does not exist: {venv_path}")
         sys.exit(1)
     
-    # Determine activation script based on platform
-    if os.name == 'nt':  # Windows
-        activate_script = venv_path / "Scripts" / "activate.bat"
-        if not activate_script.exists():
-            activate_script = venv_path / "Scripts" / "Activate.ps1"
-    else:  # Unix-like (macOS, Linux)
-        activate_script = venv_path / "bin" / "activate"
-    
-    if not activate_script.exists():
-        print(f"Error: Could not find activation script in virtual environment: {venv_path}")
+    # Check if Python executable exists in the virtual environment
+    python_exe = get_python_executable(venv_path)
+    if not Path(python_exe).exists():
+        print(f"Error: Python executable not found in virtual environment: {python_exe}")
         sys.exit(1)
     
     print(f"Using virtual environment: {venv_path}")
+    print(f"Python executable: {python_exe}")
 
 
 def validate_paths(input_dir, output_dir, template_file):
@@ -121,12 +138,13 @@ def find_input_files(input_dir):
     return sorted(files)
 
 
-def process_files(input_files, input_dir, output_dir, template_file, dry_run=False):
+def process_files(input_files, input_dir, output_dir, template_file, venv_path=None, dry_run=False):
     """Process all input files or show what would be processed in dry-run mode."""
     if not input_files:
         print("No files found in input directory.")
         return
     
+    python_exe = get_python_executable(venv_path)
     print(f"Found {len(input_files)} file(s) to process:")
     
     for i, input_file in enumerate(input_files, 1):
@@ -136,7 +154,7 @@ def process_files(input_files, input_dir, output_dir, template_file, dry_run=Fal
         
         # Construct the command
         cmd = [
-            sys.executable,  # Use the same Python interpreter
+            python_exe,  # Use the appropriate Python interpreter (venv or system)
             "a2l2pid.py",
             str(input_file),
             str(template_file),
@@ -226,14 +244,20 @@ Examples:
     setup_environment(args.venv)
     
     # Check and install dependencies if needed
-    if not check_dependencies():
+    if not check_dependencies(args.venv):
         print("Required dependencies not found. Installing...")
-        if not install_dependencies():
+        if not install_dependencies(args.venv):
             print("Failed to install dependencies. The script will use fallback parsing.")
             print("For better A2L parsing, install pya2l manually with:")
-            print("  pip install -r requirements.txt")
-            print("or:")
-            print("  pip install pya2l>=0.1.10")
+            if args.venv:
+                python_exe = get_python_executable(args.venv)
+                print(f"  {python_exe} -m pip install -r requirements.txt")
+                print("or:")
+                print(f"  {python_exe} -m pip install pya2l>=0.1.10")
+            else:
+                print("  pip install -r requirements.txt")
+                print("or:")
+                print("  pip install pya2l>=0.1.10")
             print()
     
     # Validate paths and files
@@ -248,7 +272,7 @@ Examples:
     input_files = find_input_files(args.input_dir)
     
     # Process files (or show what would be processed)
-    process_files(input_files, args.input_dir, args.output_dir, args.template, args.dry_run)
+    process_files(input_files, args.input_dir, args.output_dir, args.template, args.venv, args.dry_run)
     
     if args.dry_run:
         print()
